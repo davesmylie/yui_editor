@@ -27,16 +27,41 @@ module YuiEditor
       !@using_yui_editor.nil?
     end
 
-    def yui_editor_init
+    # this generates a widget initialisation string that can be used either for textareas present on page
+    # on document.ready, or passed to the page later (to initialise textareas added eg by ajax)
+    #
+    def yui_editor_widget_string(textArea = nil)
+      # this lets us either use the default elemement textArea passed in, or a specific id
+      if textArea.nil?
+        textArea = 'textArea.id'
+      else
+        textArea = "'#{textArea}'"
+      end
+
       options = YuiEditor.default_options.merge(@yui_editor_options || {})
 
+      editor_class = options.delete(:simple_editor) ? 'SimpleEditor' : 'Editor'
+      callbacks = (options.delete(:editor_extension_callbacks) || '')
+
+      js = <<JAVASCRIPT
+      var editor = new YAHOO.widget.#{editor_class}(#{textArea},#{options[:editor_config_javascript] || '{}'});
+      #{callbacks};
+      editor.render();
+JAVASCRIPT
+    end
+
+    def yui_editor_init
+      options = YuiEditor.default_options.merge(@yui_editor_options || {})
       version = options.delete(:version) || '2.6.0'
       editor_selector = options.delete(:selector) || 'rich_text_editor'
       editor_class = options.delete(:simple_editor) ? 'SimpleEditor' : 'Editor'
-      callbacks = (options.delete(:editor_extension_callbacks) || '')
       body_class = options.delete(:body_class) || 'yui-skin-sam'
       base_uri = options.delete(:javascript_base_uri) || '//yui.yahooapis.com'
       additional_yui_javascripts = options.delete(:additional_yui_javascripts) || []
+
+      # if only using this for inserted dom elements, you may want to skip initilizing on page load
+      skip_initialization_on_load = options.delete(:skip_initialization_on_load) || false
+
 
       compression = RAILS_ENV == 'development' ? '' : '-min'
 
@@ -49,12 +74,15 @@ module YuiEditor
       yui_scripts << 'editor/editor'
       yui_scripts += additional_yui_javascripts
       yui_scripts.each do |script|
-        result << javascript_include_tag("#{base_uri}/#{version}/build/#{script}#{compression}.js") + "\n"
+      result << javascript_include_tag("#{base_uri}/#{version}/build/#{script}#{compression}.js") + "\n"
       end
       (options[:editor_extension_javascripts] || []).each do |js|
         result << javascript_include_tag(js) + "\n"
       end
 
+
+      # better would be to skip this section entirely if skip_onload was set, but we need
+      # the class added (no idea why we need it done here though), and this needs to be done quick
       js = <<JAVASCRIPT
 YAHOO.util.Event.onDOMReady(function(){
   new YAHOO.util.Element(document.getElementsByTagName('body')[0]).addClass('#{body_class}');
@@ -63,9 +91,7 @@ YAHOO.util.Event.onDOMReady(function(){
   for (var i=0; i<textAreas.length; i++) {
     var textArea = textAreas[i];
     if (new YAHOO.util.Element(textArea).hasClass('#{editor_selector}')) {
-      var editor = new YAHOO.widget.#{editor_class}(textArea.id,#{options[:editor_config_javascript] || '{}'});
-      #{callbacks};
-      editor.render();
+      #{yui_editor_widget_string unless skip_initialization_on_load}
     }
   }
 });
@@ -74,7 +100,7 @@ JAVASCRIPT
 #       # this was adding an extra /li at the end of uls (see http://sourceforge.net/tracker/index.php?func=detail&aid=1926238&group_id=165715&atid=836476)
 #       js << "YAHOO.widget.Editor.prototype.filter_invalid_lists = function(html) { return html; };\n"
 # 
-      result << javascript_tag(js)
+      result << javascript_tag(js) 
 
       result
     end

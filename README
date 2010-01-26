@@ -14,6 +14,13 @@ class BlogController < ApplicationController
   uses_yui_editor
 end
 
+For textareas inserted into the DOM after page load (eg via ajax) you can skip the initialization on page
+load:
+
+class BlogController < ApplicationController
+  uses_yui_editor :skip_initialization_on_load => true
+end
+
 new.html.erb:
 
 <% form_for(@blog) do |f| %>
@@ -25,6 +32,10 @@ blogs.html.erb:
 <head>
   <%= include_yui_editor_if_used %>
 </head>
+
+To initialisze a textarea inserted after page load use the following helper:
+
+<%= yui_editor_widget_string('id_of_text_area') -%>
 
 # Customizing the configuration
 
